@@ -1,44 +1,5 @@
 /* VS Code Web Replica - Design System & Styling */
 
-:root {
-  /* Default VS Dark Color Palette */
-  --vsc-bg-main: #1e1e1e;
-  --vsc-bg-sidebar: #252526;
-  --vsc-bg-activitybar: #333333;
-  --vsc-bg-statusbar: #007acc;
-  --vsc-bg-panel: #1e1e1e;
-  --vsc-bg-editor: #1e1e1e;
-  --vsc-bg-tab-active: #1e1e1e;
-  --vsc-bg-tab-inactive: #2d2d2d;
-  --vsc-bg-hover: #2a2d2e;
-  --vsc-bg-selected: #37373d;
-  --vsc-bg-input: #3c3c3c;
-  --vsc-bg-button: #0e639c;
-  --vsc-bg-button-hover: #1177bb;
-  --vsc-bg-contextmenu: #303031;
-  --vsc-bg-tooltip: #252526;
-  
-  --vsc-text-main: #cccccc;
-  --vsc-text-muted: #858585;
-  --vsc-text-bright: #ffffff;
-  --vsc-text-success: #89d185;
-  --vsc-text-warning: #cca700;
-  --vsc-text-error: #f48771;
-  
-  --vsc-border-color: #3c3c3c;
-  --vsc-accent: #007acc;
-  --vsc-accent-focus: #0098ff;
-  
-  --vsc-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --vsc-font-mono: 'Consolas', 'Courier New', Courier, monospace;
-  
-  --vsc-transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  --vsc-transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  --vsc-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
-  --vsc-glass: rgba(30, 30, 30, 0.7);
-  --vsc-glass-border: rgba(255, 255, 255, 0.08);
-}
-
 /* Light Theme Variables */
 .vsc-theme-light {
   --vsc-bg-main: #f3f3f3;
@@ -73,6 +34,43 @@
 }
 /* Base resets & Layout */
 .vsc-container {
+  /* Default VS Dark Color Palette — scoped here to avoid polluting :root */
+  --vsc-bg-main: #1e1e1e;
+  --vsc-bg-sidebar: #252526;
+  --vsc-bg-activitybar: #333333;
+  --vsc-bg-statusbar: #007acc;
+  --vsc-bg-panel: #1e1e1e;
+  --vsc-bg-editor: #1e1e1e;
+  --vsc-bg-tab-active: #1e1e1e;
+  --vsc-bg-tab-inactive: #2d2d2d;
+  --vsc-bg-hover: #2a2d2e;
+  --vsc-bg-selected: #37373d;
+  --vsc-bg-input: #3c3c3c;
+  --vsc-bg-button: #0e639c;
+  --vsc-bg-button-hover: #1177bb;
+  --vsc-bg-contextmenu: #303031;
+  --vsc-bg-tooltip: #252526;
+
+  --vsc-text-main: #cccccc;
+  --vsc-text-muted: #858585;
+  --vsc-text-bright: #ffffff;
+  --vsc-text-success: #89d185;
+  --vsc-text-warning: #cca700;
+  --vsc-text-error: #f48771;
+
+  --vsc-border-color: #3c3c3c;
+  --vsc-accent: #007acc;
+  --vsc-accent-focus: #0098ff;
+
+  --vsc-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --vsc-font-mono: 'Consolas', 'Courier New', Courier, monospace;
+
+  --vsc-transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --vsc-transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --vsc-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  --vsc-glass: rgba(30, 30, 30, 0.7);
+  --vsc-glass-border: rgba(255, 255, 255, 0.08);
+
   display: flex;
   flex-direction: column;
   width: 100%;

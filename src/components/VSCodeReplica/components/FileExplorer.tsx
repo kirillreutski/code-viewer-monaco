@@ -16,6 +16,8 @@ interface FileExplorerProps {
   onFolderExpand: (path: string) => Promise<void>; // Hooks dynamic expand calls
   loadingFolders: Set<string>; // Tracks currently loading directory states
   loadingFiles?: Set<string>; // Tracks currently loading files
+  /** z-index for context menu. Raise above MUI layers (1200+) when embedding. Default: 1000 */
+  contextMenuZIndex?: number;
 }
 
 interface ContextMenuState {
@@ -37,6 +39,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   onFolderExpand,
   loadingFolders,
   loadingFiles,
+  contextMenuZIndex,
 }) => {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set<string>(['src']));
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
@@ -371,7 +374,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
       {contextMenu.visible && (
         <div
           className="vsc-context-menu"
-          style={{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }}
+          style={{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px`, zIndex: contextMenuZIndex ?? 1000 }}
           onClick={e => e.stopPropagation()}
         >
           {contextMenu.isFolder && (

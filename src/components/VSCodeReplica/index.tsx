@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import { Files, Search, X } from 'lucide-react';
 
 import { FileExplorer } from './components/FileExplorer';
 import { SearchAndReplace } from './components/SearchAndReplace';
 import { CommandPalette } from './components/CommandPalette';
+import { MonacoErrorBoundary } from './components/MonacoErrorBoundary';
 
-import { FileItem, TabItem, VSCodeReplicaProps } from './types';
+import { FileItem, TabItem, VSCodeReplicaProps, FileMarker } from './types';
 import './styles/vscode.css';
 
 const DEFAULT_FILES: Record<string, string> = {
@@ -88,15 +89,71 @@ h1 {
 }`
 };
 
+/** Default Monaco editor options — can be overridden/extended via monacoOptions prop */
+const DEFAULT_MONACO_OPTIONS = {
+  fontSize: 13,
+  fontFamily: "Consolas, 'Courier New', monospace",
+  minimap: { enabled: true },
+  wordWrap: 'off' as const,
+  tabSize: 4,
+  lineNumbers: 'on' as const,
+  cursorBlinking: 'blink' as const,
+  scrollbar: {
+    vertical: 'visible' as const,
+    horizontal: 'visible' as const,
+  },
+};
+
+/** Maps FileMarker severity string to Monaco MarkerSeverity enum values */
+const MARKER_SEVERITY_MAP = {
+  hint: 1,
+  info: 2,
+  warning: 4,
+  error: 8,
+} as const;
+
+/** Apply markers to all matching Monaco models */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const applyMarkers = (monaco: any, markers: Record<string, FileMarker[]>) => {
+  Object.entries(markers).forEach(([path, fileMarkers]) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const model = monaco.editor.getModels().find((m: any) =>
+      m.uri.path === `/${path}` || m.uri.path.endsWith(`/${path}`)
+    );
+    if (!model) return;
+    monaco.editor.setModelMarkers(
+      model,
+      'external',
+      fileMarkers.map((m: FileMarker) => ({
+        severity: MARKER_SEVERITY_MAP[m.severity],
+        message: m.message,
+        source: m.source,
+        startLineNumber: m.startLine,
+        startColumn: m.startColumn,
+        endLineNumber: m.endLine,
+        endColumn: m.endColumn,
+      }))
+    );
+  });
+};
+
 export const VSCodeReplica: React.FC<VSCodeReplicaProps> = ({
   files: propsFiles,
   onFileChange,
   onFileSelect,
+  onFileCreate,
+  onFileDelete,
+  onFileRename,
   lazyLoadFile,
   lazyLoadFolder,
   styleOverride,
   className = '',
   defaultTheme = 'vs-dark',
+  defaultOpenFile,
+  monacoOptions,
+  markers,
+  contextMenuZIndex,
+  sidebarWidth = 260,
 }) => {
   // Theme state ('vs-dark' | 'light')
   const [theme, setTheme] = useState<'vs-dark' | 'light'>(defaultTheme);
@@ -116,6 +173,11 @@ export const VSCodeReplica: React.FC<VSCodeReplicaProps> = ({
   // Loading indicators for dynamic fetching
   const [loadingFiles, setLoadingFiles] = useState<Set<string>>(new Set());
   const [loadingFolders, setLoadingFolders] = useState<Set<string>>(new Set());
+
+  // Refs — containerRef for scoped keyboard listener (A2), monacoRef for setModelMarkers (B2)
+  const containerRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const monacoRef = useRef<any>(null);
 
   // Sync internal theme state with outer defaultTheme prop
   useEffect(() => {
@@ -138,8 +200,10 @@ export const VSCodeReplica: React.FC<VSCodeReplicaProps> = ({
         );
         setFiles(initialFiles);
 
-        // Open README by default
-        const defaultFile = initialFiles.find(f => f.path === 'README.md' && !f.isFolder);
+        // Open defaultOpenFile or README by default
+        const defaultFile = defaultOpenFile
+          ? initialFiles.find(f => f.path === defaultOpenFile && !f.isFolder)
+          : initialFiles.find(f => f.path === 'README.md' && !f.isFolder);
         if (defaultFile) {
           setActiveFilePath(defaultFile.path);
           setTabs([{ path: defaultFile.path, name: defaultFile.name }]);
@@ -197,7 +261,10 @@ export const VSCodeReplica: React.FC<VSCodeReplicaProps> = ({
     // Also handle default active file if nothing is active yet
     if (!activeFilePath) {
       const initialPaths = Object.keys(propsFiles);
-      const defaultPath = initialPaths.find(p => p.endsWith('README.md')) || initialPaths[0];
+      // Priority: defaultOpenFile prop → README.md → first file
+      const defaultPath = defaultOpenFile
+        ?? initialPaths.find(p => p.endsWith('README.md'))
+        ?? initialPaths[0];
       if (defaultPath) {
         const name = defaultPath.split('/').pop() || defaultPath;
         const data = propsFiles[defaultPath];
@@ -210,17 +277,25 @@ export const VSCodeReplica: React.FC<VSCodeReplicaProps> = ({
     }
   }, [propsFiles]);
 
-  // Keyboard listener for Cmd+Shift+P / F1 Command Palette
+  // A2: Keyboard listener for Cmd+Shift+P / F1 — scoped to container element, not window
   useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'p') || e.key === 'F1') {
         e.preventDefault();
         setIsPaletteOpen(prev => !prev);
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    el.addEventListener('keydown', handleKeyDown);
+    return () => el.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  // B2: Apply external markers when markers prop changes
+  useEffect(() => {
+    if (!monacoRef.current || !markers) return;
+    applyMarkers(monacoRef.current, markers);
+  }, [markers]);
 
   // File explorer selection
   const handleFileSelect = async (path: string, line?: number) => {
@@ -340,6 +415,9 @@ export const VSCodeReplica: React.FC<VSCodeReplicaProps> = ({
       setTabs(prev => [...prev, { path, name }]);
       setActiveFilePath(path);
     }
+
+    // B4: CRUD callback
+    onFileCreate?.(path, isFolder);
   };
 
   const handleRenameFile = (oldPath: string, newPath: string) => {
@@ -362,6 +440,9 @@ export const VSCodeReplica: React.FC<VSCodeReplicaProps> = ({
     }));
 
     if (activeFilePath === oldPath) setActiveFilePath(newPath);
+
+    // B4: CRUD callback
+    onFileRename?.(oldPath, newPath);
   };
 
   const handleDeleteFile = (path: string) => {
@@ -373,6 +454,9 @@ export const VSCodeReplica: React.FC<VSCodeReplicaProps> = ({
         handleCloseTab(t.path);
       }
     });
+
+    // B4: CRUD callback
+    onFileDelete?.(path);
   };
 
   const handleDuplicateFile = (path: string) => {
@@ -401,7 +485,7 @@ export const VSCodeReplica: React.FC<VSCodeReplicaProps> = ({
         if (regexOpt) {
           matcher = new RegExp(search, flags);
         } else {
-          let escaped = search.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+          let escaped = search.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
           if (wholeWord) escaped = `\\b${escaped}\\b`;
           matcher = new RegExp(escaped, flags);
         }
@@ -477,9 +561,12 @@ export const VSCodeReplica: React.FC<VSCodeReplicaProps> = ({
   const breadcrumbs = activeFilePath ? activeFilePath.split('/') : [];
 
   return (
+    // A2: ref + tabIndex={-1} — enables scoped keyboard events without tab-order intrusion
     <div 
+      ref={containerRef}
       className={`vsc-container vsc-theme-${theme} ${className}`}
       style={styleOverride}
+      tabIndex={-1}
     >
       
       {/* WORKSPACE AREA */}
@@ -511,9 +598,9 @@ export const VSCodeReplica: React.FC<VSCodeReplicaProps> = ({
           </div>
         </div>
 
-        {/* Sidebar panels */}
+        {/* Sidebar panels — B5: width controlled via sidebarWidth prop */}
         {isSidebarOpen && (
-          <div className="vsc-sidebar">
+          <div className="vsc-sidebar" style={{ width: sidebarWidth }}>
             {activeSidebar === 'explorer' && (
               <FileExplorer
                 files={files}
@@ -526,6 +613,7 @@ export const VSCodeReplica: React.FC<VSCodeReplicaProps> = ({
                 onFolderExpand={handleFolderExpand}
                 loadingFolders={loadingFolders}
                 loadingFiles={loadingFiles}
+                contextMenuZIndex={contextMenuZIndex}
               />
             )}
             {activeSidebar === 'search' && (
@@ -598,27 +686,24 @@ export const VSCodeReplica: React.FC<VSCodeReplicaProps> = ({
                     <span style={{ fontSize: '13px' }}>Fetching file from remote repository...</span>
                   </div>
                 ) : (
-                  <Editor
-                    height="100%"
-                    path={currentFile.path}
-                    value={currentFile.content || ''}
-                    language={currentLanguage}
-                    onChange={(val) => handleUpdateFileContent(currentFile.path, val || '')}
-                    theme={theme === 'light' ? 'vs' : 'vs-dark'}
-                    options={{
-                      fontSize: 13,
-                      fontFamily: "Consolas, 'Courier New', monospace",
-                      minimap: { enabled: true },
-                      wordWrap: 'off',
-                      tabSize: 4,
-                      lineNumbers: 'on',
-                      cursorBlinking: 'blink',
-                      scrollbar: {
-                        vertical: 'visible',
-                        horizontal: 'visible'
-                      }
-                    }}
-                  />
+                  <MonacoErrorBoundary>
+                    <Editor
+                      height="100%"
+                      path={currentFile.path}
+                      value={currentFile.content || ''}
+                      language={currentLanguage}
+                      onChange={(val) => handleUpdateFileContent(currentFile.path, val || '')}
+                      theme={theme === 'light' ? 'vs' : 'vs-dark'}
+                      onMount={(editor, monaco) => {
+                        monacoRef.current = monaco;
+                        // Apply any markers that arrived before the editor mounted
+                        if (markers) applyMarkers(monaco, markers);
+                        void editor; // suppress unused var warning
+                      }}
+                      // B1: Merge consumer options on top of defaults
+                      options={{ ...DEFAULT_MONACO_OPTIONS, ...monacoOptions }}
+                    />
+                  </MonacoErrorBoundary>
                 )
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--vsc-text-muted)', gap: '12px' }}>
