@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import Editor from '@monaco-editor/react';
-import { Files, Search, X } from 'lucide-react';
+import Editor, { DiffEditor } from '@monaco-editor/react';
+import { Files, Search, X } from './components/icons';
 
 import { FileExplorer } from './components/FileExplorer';
 import { SearchAndReplace } from './components/SearchAndReplace';
@@ -9,6 +9,9 @@ import { MonacoErrorBoundary } from './components/MonacoErrorBoundary';
 
 import { FileItem, TabItem, VSCodeReplicaProps, FileMarker } from './types';
 import './styles/vscode.css';
+
+// Re-export the public types so consumers can `import { VSCodeReplica, FileMarker } from 'code-viewer-monaco'`
+export type { FileItem, FileMarker, FileDecoration, MonacoEditorOptions, VSCodeReplicaProps } from './types';
 
 const DEFAULT_FILES: Record<string, string> = {
   'README.md': `# VS Code Web Replica (Sleek Mode) 🚀
@@ -98,6 +101,9 @@ const DEFAULT_MONACO_OPTIONS = {
   tabSize: 4,
   lineNumbers: 'on' as const,
   cursorBlinking: 'blink' as const,
+  // Show marker squigglies even in readOnly editors (Monaco hides them by default
+  // when readOnly). This package is primarily a viewer, so default them on.
+  renderValidationDecorations: 'on' as const,
   scrollbar: {
     vertical: 'visible' as const,
     horizontal: 'visible' as const,
@@ -146,13 +152,17 @@ export const VSCodeReplica: React.FC<VSCodeReplicaProps> = ({
   onFileRename,
   lazyLoadFile,
   lazyLoadFolder,
+  lazyLoadDiff,
+  diffablePaths,
   styleOverride,
   className = '',
   defaultTheme = 'vs-dark',
   defaultOpenFile,
   monacoOptions,
   markers,
+  decorations,
   contextMenuZIndex,
+  disableFileOps,
   sidebarWidth = 260,
 }) => {
   // Theme state ('vs-dark' | 'light')
@@ -173,6 +183,11 @@ export const VSCodeReplica: React.FC<VSCodeReplicaProps> = ({
   // Loading indicators for dynamic fetching
   const [loadingFiles, setLoadingFiles] = useState<Set<string>>(new Set());
   const [loadingFolders, setLoadingFolders] = useState<Set<string>>(new Set());
+
+  // Diff view: per-active-file Content/Diff toggle + lazily-fetched, cached diff data
+  const [viewMode, setViewMode] = useState<'content' | 'diff'>('content');
+  const [diffData, setDiffData] = useState<Record<string, { original: string; modified: string }>>({});
+  const [loadingDiffs, setLoadingDiffs] = useState<Set<string>>(new Set());
 
   // Refs — containerRef for scoped keyboard listener (A2), monacoRef for setModelMarkers (B2)
   const containerRef = useRef<HTMLDivElement>(null);
@@ -296,6 +311,31 @@ export const VSCodeReplica: React.FC<VSCodeReplicaProps> = ({
     if (!monacoRef.current || !markers) return;
     applyMarkers(monacoRef.current, markers);
   }, [markers]);
+
+  // Reset to the Content view whenever the active file changes
+  useEffect(() => {
+    setViewMode('content');
+  }, [activeFilePath]);
+
+  // Toggle Content/Diff for the active file; fetch the diff lazily on first switch, then cache.
+  const handleSetViewMode = async (mode: 'content' | 'diff') => {
+    setViewMode(mode);
+    if (mode !== 'diff' || !activeFilePath || !lazyLoadDiff) return;
+    if (diffData[activeFilePath] || loadingDiffs.has(activeFilePath)) return;
+    setLoadingDiffs(prev => new Set(prev).add(activeFilePath));
+    try {
+      const d = await lazyLoadDiff(activeFilePath);
+      setDiffData(prev => ({ ...prev, [activeFilePath]: d }));
+    } catch (err) {
+      console.error('Lazy diff load failed for file:', activeFilePath, err);
+    } finally {
+      setLoadingDiffs(prev => {
+        const next = new Set(prev);
+        next.delete(activeFilePath);
+        return next;
+      });
+    }
+  };
 
   // File explorer selection
   const handleFileSelect = async (path: string, line?: number) => {
@@ -513,18 +553,44 @@ export const VSCodeReplica: React.FC<VSCodeReplicaProps> = ({
     handleUpdateFileContent(activeFilePath, formatted);
   };
 
-  // Language mappings helper
+  // Language mappings helper. Salesforce-aware: Apex, SOQL, Aura/Visualforce markup,
+  // and Flow. Source-format metadata files (`*.flow-meta.xml`, `*.js-meta.xml`,
+  // `*.cls-meta.xml`, …) resolve to `xml` via their trailing extension.
   const getLanguageFromExtension = (filename: string): string => {
     const ext = filename.split('.').pop()?.toLowerCase();
     switch (ext) {
+      // ── Salesforce ──────────────────────────────────────────────
+      case 'cls':
+      case 'trigger': return 'apex';
+      case 'soql':
+      case 'sosl': return 'sql';
+      // Aura bundle markup + Visualforce pages/components (HTML-like)
+      case 'cmp':
+      case 'app':
+      case 'evt':
+      case 'intf':
+      case 'auradoc':
+      case 'design':
+      case 'tokens':
+      case 'page':
+      case 'component': return 'html';
+      // Flow in MDAPI single-file form (source format is `*.flow-meta.xml` → xml)
+      case 'flow': return 'xml';
+      // ── Web / LWC / Aura JS ─────────────────────────────────────
       case 'js':
       case 'jsx': return 'javascript';
       case 'ts':
       case 'tsx': return 'typescript';
-      case 'html': return 'html';
+      case 'html':
+      case 'htm': return 'html';
       case 'css': return 'css';
       case 'json': return 'json';
       case 'md': return 'markdown';
+      case 'xml': return 'xml';
+      case 'sql': return 'sql';
+      case 'yaml':
+      case 'yml': return 'yaml';
+      // ── Generic ─────────────────────────────────────────────────
       case 'py': return 'python';
       case 'cpp':
       case 'h': return 'cpp';
@@ -533,10 +599,6 @@ export const VSCodeReplica: React.FC<VSCodeReplicaProps> = ({
       case 'rs': return 'rust';
       case 'sh':
       case 'bash': return 'shell';
-      case 'sql': return 'sql';
-      case 'xml': return 'xml';
-      case 'yaml':
-      case 'yml': return 'yaml';
       case 'dockerfile': return 'dockerfile';
       default: return 'plaintext';
     }
@@ -614,6 +676,8 @@ export const VSCodeReplica: React.FC<VSCodeReplicaProps> = ({
                 loadingFolders={loadingFolders}
                 loadingFiles={loadingFiles}
                 contextMenuZIndex={contextMenuZIndex}
+                disableFileOps={disableFileOps}
+                decorations={decorations}
               />
             )}
             {activeSidebar === 'search' && (
@@ -647,7 +711,7 @@ export const VSCodeReplica: React.FC<VSCodeReplicaProps> = ({
                           <span className="vsc-loading-spinner-micro" />
                         </div>
                       )}
-                      <span>{tab.name}</span>
+                      <span className="vsc-tab-label" title={tab.name}>{tab.name}</span>
                       {isModified ? (
                         <span className="vsc-tab-modified-dot" title="Modified" />
                       ) : null}
@@ -674,6 +738,19 @@ export const VSCodeReplica: React.FC<VSCodeReplicaProps> = ({
                     <span className="vsc-breadcrumb-item">{crumb}</span>
                   </React.Fragment>
                 ))}
+                {lazyLoadDiff && (!diffablePaths || (activeFilePath != null && diffablePaths.includes(activeFilePath))) && (
+                  <div className="vsc-view-toggle">
+                    {(['content', 'diff'] as const).map(m => (
+                      <button
+                        key={m}
+                        className={`vsc-view-toggle-btn ${viewMode === m ? 'active' : ''}`}
+                        onClick={() => handleSetViewMode(m)}
+                      >
+                        {m === 'content' ? 'Content' : 'Diff'}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -685,9 +762,36 @@ export const VSCodeReplica: React.FC<VSCodeReplicaProps> = ({
                     <div className="vsc-loading-spinner-large" />
                     <span style={{ fontSize: '13px' }}>Fetching file from remote repository...</span>
                   </div>
+                ) : viewMode === 'diff' ? (
+                  diffData[activeFilePath] ? (
+                    <MonacoErrorBoundary>
+                      <DiffEditor
+                        height="100%"
+                        original={diffData[activeFilePath].original}
+                        modified={diffData[activeFilePath].modified}
+                        language={currentLanguage}
+                        theme={theme === 'light' ? 'vs' : 'vs-dark'}
+                        options={{ ...DEFAULT_MONACO_OPTIONS, ...monacoOptions, readOnly: true, renderSideBySide: true }}
+                      />
+                    </MonacoErrorBoundary>
+                  ) : loadingDiffs.has(activeFilePath) ? (
+                    <div className="vsc-editor-loader">
+                      <div className="vsc-loading-spinner-large" />
+                      <span style={{ fontSize: '13px' }}>Loading diff…</span>
+                    </div>
+                  ) : (
+                    <div className="vsc-editor-loader">
+                      <span style={{ fontSize: '13px', color: 'var(--vsc-text-muted)' }}>Diff unavailable for this file.</span>
+                    </div>
+                  )
                 ) : (
                   <MonacoErrorBoundary>
                     <Editor
+                      // Remount per file: @monaco-editor/react's path+value+readOnly model
+                      // management races on tab switches (wrong model shown, stale onChange
+                      // firing → false "modified", markers attached to the hidden model).
+                      // A per-path key gives each file a clean editor + its own model.
+                      key={currentFile.path}
                       height="100%"
                       path={currentFile.path}
                       value={currentFile.content || ''}

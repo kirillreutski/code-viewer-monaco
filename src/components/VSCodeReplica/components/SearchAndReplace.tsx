@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Replace, ChevronRight, ChevronDown, CaseSensitive, WholeWord, Regex } from 'lucide-react';
+import { Replace, ChevronRight, ChevronDown, CaseSensitive, WholeWord, Regex } from './icons';
 import { FileItem } from '../types';
 
 interface SearchAndReplaceProps {

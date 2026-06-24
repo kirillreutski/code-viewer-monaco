@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { VSCodeReplica } from './components/VSCodeReplica';
-import { Terminal, Code2, Layers, Cpu, CloudLightning } from 'lucide-react';
+import { Terminal, Code2, Layers, Cpu, CloudLightning } from './components/VSCodeReplica/components/icons';
 
 export default function App() {
   const [theme, setTheme] = useState<'vs-dark' | 'light'>('vs-dark');

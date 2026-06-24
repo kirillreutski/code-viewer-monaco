@@ -1,7 +1,10 @@
 /* VS Code Web Replica - Design System & Styling */
 
-/* Light Theme Variables */
-.vsc-theme-light {
+/* Light Theme Variables.
+   Scoped as `.vsc-container.vsc-theme-light` (specificity 0,2,0) so it overrides
+   the `.vsc-container` VS Dark defaults below — same-specificity `.vsc-theme-light`
+   lost to the later `.vsc-container` rule, leaving light mode stuck on dark chrome. */
+.vsc-container.vsc-theme-light {
   --vsc-bg-main: #f3f3f3;
   --vsc-bg-sidebar: #f3f3f3;
   --vsc-bg-activitybar: #2c2c2c;
@@ -750,6 +753,21 @@
   transition: background-color var(--vsc-transition-fast), color var(--vsc-transition-fast);
 }
 
+/* Tab filename: fill the remaining width and truncate with an ellipsis instead of
+   spilling the name past the tab's max-width. min-width:0 lets the flex item shrink
+   below its content size. */
+.vsc-tab-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vsc-tab .vsc-tab-close {
+  flex-shrink: 0;
+}
+
 .vsc-tab:hover {
   background-color: rgba(255, 255, 255, 0.02);
   color: var(--vsc-text-main);
@@ -804,6 +822,35 @@
   font-size: 11px;
   color: var(--vsc-text-muted);
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.vsc-view-toggle {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+}
+
+.vsc-view-toggle-btn {
+  height: 16px;
+  padding: 0 8px;
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--vsc-text-muted);
+  background: transparent;
+  border: 1px solid var(--vsc-border-color);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color var(--vsc-transition-fast), color var(--vsc-transition-fast);
+}
+
+.vsc-view-toggle-btn:hover {
+  color: var(--vsc-text-main);
+}
+
+.vsc-view-toggle-btn.active {
+  color: var(--vsc-text-bright);
+  background-color: var(--vsc-accent);
+  border-color: var(--vsc-accent);
 }
 
 .vsc-breadcrumb-item {

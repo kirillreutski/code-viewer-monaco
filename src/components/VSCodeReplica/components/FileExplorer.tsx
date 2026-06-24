@@ -1,9 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Folder, FolderOpen, File, ChevronRight, ChevronDown, 
+import {
+  Folder, FolderOpen, File, ChevronRight, ChevronDown,
   FilePlus, FolderPlus, Trash2, Copy
-} from 'lucide-react';
-import { FileItem } from '../types';
+} from './icons';
+import { FileItem, FileDecoration } from '../types';
+
+/** Map a decoration tone to its themed CSS colour variable. */
+const toneColor = (tone?: FileDecoration['tone']): string => {
+  switch (tone) {
+    case 'error': return 'var(--vsc-text-error)';
+    case 'warning': return 'var(--vsc-text-warning)';
+    case 'success': return 'var(--vsc-text-success)';
+    case 'info': return 'var(--vsc-accent)';
+    default: return 'var(--vsc-text-muted)';
+  }
+};
 
 interface FileExplorerProps {
   files: FileItem[];
@@ -18,6 +29,10 @@ interface FileExplorerProps {
   loadingFiles?: Set<string>; // Tracks currently loading files
   /** z-index for context menu. Raise above MUI layers (1200+) when embedding. Default: 1000 */
   contextMenuZIndex?: number;
+  /** Viewer mode: suppress the right-click context menu and the modified/new (M/U) badges. */
+  disableFileOps?: boolean;
+  /** External per-file badges (e.g. violation counts, change status). Key = file path. */
+  decorations?: Record<string, FileDecoration>;
 }
 
 interface ContextMenuState {
@@ -40,6 +55,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   loadingFolders,
   loadingFiles,
   contextMenuZIndex,
+  disableFileOps,
+  decorations,
 }) => {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set<string>(['src']));
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
@@ -108,6 +125,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   const handleContextMenu = (e: React.MouseEvent, path: string, isFolder: boolean) => {
     e.preventDefault();
     e.stopPropagation();
+    // Viewer mode: no file-mutation menu.
+    if (disableFileOps) return;
     setContextMenu({
       visible: true,
       x: e.clientX,
@@ -227,6 +246,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
     const isEditing = editingPath === node.path;
     const isModified = node.fileData?.isModified;
     const isNew = node.fileData?.originalContent === undefined && !node.isFolder;
+    const decoration = decorations?.[node.path];
 
     let nodeClass = 'vsc-tree-node';
     if (isActive) nodeClass += ' selected';
@@ -302,11 +322,20 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
             <span className="vsc-tree-node-label">{node.name}</span>
           )}
 
-          {isModified && !node.isFolder && (
+          {isModified && !node.isFolder && !disableFileOps && (
             <span className="vsc-tree-node-badge" style={{ color: 'var(--vsc-text-warning)' }}>M</span>
           )}
-          {isNew && !node.isFolder && (
+          {isNew && !node.isFolder && !disableFileOps && (
             <span className="vsc-tree-node-badge" style={{ color: 'var(--vsc-text-success)' }}>U</span>
+          )}
+          {decoration?.badge != null && decoration.badge !== '' && (
+            <span
+              className="vsc-tree-node-badge"
+              style={{ color: toneColor(decoration.tone), marginLeft: 'auto' }}
+              title={decoration.tooltip}
+            >
+              {decoration.badge}
+            </span>
           )}
         </div>
 
