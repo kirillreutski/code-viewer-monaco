@@ -1,6 +1,6 @@
 {
   "name": "code-viewer-monaco",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A high-fidelity visual VS Code replica with file tree navigation, search, and dynamic lazy loading, powered by Monaco Editor.",
   "author": "Kirill Reutski",
   "license": "MIT",
@@ -23,7 +23,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prepublishOnly": "npm run build && node --input-type=module -e \"import{readFileSync}from'fs';const d=readFileSync('dist/index.d.ts','utf8');if(!/VSCodeReplica/.test(d)){console.error('ABORT publish: dist/index.d.ts is missing exports (rollupTypes produced an empty declaration). Re-run the build.');process.exit(1)}console.log('dts guard OK')\""
   },
   "peerDependencies": {
     "@monaco-editor/react": ">=4.0.0",
